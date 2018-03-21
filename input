@@ -1,0 +1,10 @@
+Number = 30
+M = 10
+AX = 0
+BX = 3
+AY = 0
+BY = 1
+TAU = 0.01
+P_inlet = 1
+P_outlet = 0
+NU = 0.01 
