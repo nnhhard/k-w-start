@@ -258,10 +258,10 @@ void SolveTransportU(double p1, double p2, double TAU, double a_x, double b_x, d
             else
             {
                 double lamda = hy[j] / hy[j-1];
-                A[j] =  - v_n[i][j] / (hy[j] + hy[j-1]) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j-1] ) * ( NU );
-                B[j] =  2.0/TAU - (- 1.0 / hy[j] * ( NU ) - 1.0 / hy[j-1] * ( NU )) / ( (hy[j] + hy[j-1])/2.0 ) + v_n[i][j] * ( - (1 - lamda * lamda) / (lamda * (hy[j] + hy[j-1])) );
-                C[j] =  v_n[i][j] / (lamda * (hy[j] + hy[j-1])) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j] ) * ( NU );
-                F[j] =  - u_n[i][j] * ddxParabola(u_n,i,j,hx) + NU * d2dx2(u_n,i,j,hx) + 2.0*u_n[i][j]/TAU;
+                A[j] =  - v_n[i][j] / (hy[j] + hy[j-1]) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j-1] ) * nuTurbulent[i][j] + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] )  / ( (hy[j] + hy[j-1]) * hy[j-1] );
+                B[j] =  2.0/TAU - nuTurbulent[i][j] * (- 1.0 / hy[j] - 1.0 / hy[j-1] ) / ( (hy[j] + hy[j-1])/2.0 ) + v_n[i][j] * ( - (1 - lamda * lamda) / (lamda * (hy[j] + hy[j-1])) ) + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] ) * ( - (1 - lamda * lamda) / (lamda * (hy[j] + hy[j-1])) );
+                C[j] =  v_n[i][j] / (lamda * (hy[j] + hy[j-1])) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j] ) * nuTurbulent[i][j] + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] ) / ( (hy[j] + hy[j-1]) * hy[j] );
+                F[j] =  - u_n[i][j] * ddxParabola(u_n,i,j,hx) + nuTurbulent[i][j] * d2dx2(u_n,i,j,hx) + 2.0*u_n[i][j]/TAU + /*ddxParabola(nuTurbulent, i, j, hx)*/( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) * ddxParabola(u_n, i, j, hx);
             }
         }
         SolveByScalarRun(lM,u_temp_y,A,B,C,F);
@@ -315,11 +315,11 @@ void SolveTransportU(double p1, double p2, double TAU, double a_x, double b_x, d
                 else
                 {
                     double lamda = hx[i] / hx[i-1];
+                    A[i] =  - u_n[i][j] / (hx[i] + hx[i-1]) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i-1] ) * nuTurbulent[i][j] + /*ddxParabola(nuTurbulent, i, j, hx)*/( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) / ( (hx[i] + hx[i-1]) * hx[i-1] );
+                    B[i] =  2.0/TAU - nuTurbulent[i][j] * (- 1.0 / hx[i] - 1.0 / hx[i-1] ) / ( (hx[i] + hx[i-1])/2.0 ) + u_n[i][j] * ( - (1 - lamda * lamda) / (lamda * (hx[i] + hx[i-1])) ) + /*ddxParabola(nuTurbulent, i, j, hx)*/ ( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) * ( - (1 - lamda * lamda) / (lamda * (hx[i] + hx[i-1])) );
+                    C[i] =  u_n[i][j] / (lamda * (hx[i] + hx[i-1])) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i] ) * nuTurbulent[i][j] + /*ddxParabola(nuTurbulent, i, j, hx)*/ ( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) / ( (hx[i] + hx[i-1]) * hx[i] );
+                    F[i] =  - v_n[i][j] * ddyParabola(u_1_2,i,j,hy) + nuTurbulent[i][j] * d2dy2(u_1_2,i,j,hy) +2.0*u_1_2[i][j]/TAU + ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] ) * ddyParabola(u_1_2, i, j, hy);
 
-                    A[i] =  - u_n[i][j] / (hx[i] + hx[i-1]) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i-1] ) * ( NU );
-                    B[i] =  2.0/TAU - (- 1.0 / hx[i] * ( NU ) - 1.0 / hx[i-1] * ( NU )) / ( (hx[i] + hx[i-1])/2.0 ) + u_n[i][j] * ( - (1 - lamda * lamda) / (lamda * (hx[i] + hx[i-1])) );
-                    C[i] =  u_n[i][j] / (lamda * (hx[i] + hx[i-1])) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i] ) * ( NU );
-                    F[i] =  - v_n[i][j] * ddyParabola(u_1_2,i,j,hy) + NU * d2dy2(u_1_2,i,j,hy) +2.0*u_1_2[i][j]/TAU;
                 }
             }
         SolveByScalarRun(lN,u_temp_x,A,B,C,F);
@@ -398,10 +398,10 @@ void SolveTransportV(double p1, double p2, double TAU, double a_x, double b_x, d
                 F[j]=0;
              } else {
                 double lamda = hy[j] / hy[j-1];
-                A[j] =  - v_n[i][j] / (hy[j] + hy[j-1]) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j-1] ) * ( NU );
-                B[j] =  2.0/TAU - (- 1.0 / hy[j] * ( NU ) - 1.0 / hy[j-1] * ( NU )) / ( (hy[j] + hy[j-1])/2.0 ) + v_n[i][j] * ( - (1 - lamda * lamda) / (lamda * (hy[j] + hy[j-1])) );
-                C[j] =  v_n[i][j] / (lamda * (hy[j] + hy[j-1])) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j] ) * ( NU );
-                F[j] =  - u_n[i][j] * ddxParabola(u_n,i,j,hx) + NU * d2dx2(u_n,i,j,hx) + 2.0*u_n[i][j]/TAU;
+                A[j] =  - v_n[i][j] / (hy[j] + hy[j-1]) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j-1] ) * nuTurbulent[i][j] + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] )  / ( (hy[j] + hy[j-1]) * hy[j-1] );
+                B[j] =  2.0/TAU - nuTurbulent[i][j] * (- 1.0 / hy[j] - 1.0 / hy[j-1] ) / ( (hy[j] + hy[j-1])/2.0 ) + v_n[i][j] * ( - (1 - lamda * lamda) / (lamda * (hy[j] + hy[j-1])) ) + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] ) * ( - (1 - lamda * lamda) / (lamda * (hy[j] + hy[j-1])) );
+                C[j] =  v_n[i][j] / (lamda * (hy[j] + hy[j-1])) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j] ) * nuTurbulent[i][j] + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] ) / ( (hy[j] + hy[j-1]) * hy[j] );
+                F[j] =  - u_n[i][j] * ddxParabola(u_n,i,j,hx) + nuTurbulent[i][j] * d2dx2(u_n,i,j,hx) + 2.0*u_n[i][j]/TAU + /*ddxParabola(nuTurbulent, i, j, hx)*/( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) * ddxParabola(u_n, i, j, hx);
             }
         }
         SolveByScalarRun(lM,u_temp_y,A,B,C,F);
@@ -447,10 +447,10 @@ void SolveTransportV(double p1, double p2, double TAU, double a_x, double b_x, d
                 F[i]=0;
             } else {
                 double lamda = hx[i] / hx[i-1];
-                A[i] =  - u_n[i][j] / (hx[i] + hx[i-1]) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i-1] ) * ( NU );
-                B[i] =  2.0/TAU - (- 1.0 / hx[i] * ( NU ) - 1.0 / hx[i-1] * ( NU )) / ( (hx[i] + hx[i-1])/2.0 ) + u_n[i][j] * ( - (1 - lamda * lamda) / (lamda * (hx[i] + hx[i-1])) );
-                C[i] =  u_n[i][j] / (lamda * (hx[i] + hx[i-1])) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i] ) * ( NU );
-                F[i] =  - v_n[i][j] * ddyParabola(u_1_2,i,j,hy) + NU * d2dy2(u_1_2,i,j,hy) +2.0*u_1_2[i][j]/TAU;
+                A[i] =  - u_n[i][j] / (hx[i] + hx[i-1]) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i-1] ) * nuTurbulent[i][j] + /*ddxParabola(nuTurbulent, i, j, hx)*/( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) / ( (hx[i] + hx[i-1]) * hx[i-1] );
+                B[i] =  2.0/TAU - nuTurbulent[i][j] * (- 1.0 / hx[i] - 1.0 / hx[i-1] ) / ( (hx[i] + hx[i-1])/2.0 ) + u_n[i][j] * ( - (1 - lamda * lamda) / (lamda * (hx[i] + hx[i-1])) ) + /*ddxParabola(nuTurbulent, i, j, hx)*/ ( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) * ( - (1 - lamda * lamda) / (lamda * (hx[i] + hx[i-1])) );
+                C[i] =  u_n[i][j] / (lamda * (hx[i] + hx[i-1])) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i] ) * nuTurbulent[i][j] + /*ddxParabola(nuTurbulent, i, j, hx)*/ ( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) / ( (hx[i] + hx[i-1]) * hx[i] );
+                F[i] =  - v_n[i][j] * ddyParabola(u_1_2,i,j,hy) + nuTurbulent[i][j] * d2dy2(u_1_2,i,j,hy) +2.0*u_1_2[i][j]/TAU + ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] ) * ddyParabola(u_1_2, i, j, hy);
             }
         }
         SolveByScalarRun(lN,u_temp_x,A,B,C,F);
@@ -495,8 +495,8 @@ void Print(FILE *f,int t, int lN, int lM, double *x, double *y, double **u,doubl
 const double a_x = 0, b_x = 3;
 const double a_y = 0, b_y = 1;
 
-const int N = 90;
-const int M = 30;
+const int N = 30;
+const int M = 10;
 
 const int uN = N;
 const int uM = M + 1;
@@ -719,7 +719,9 @@ int main() {
     null(v, vN, vM);
     null(u_proec, vN, vM);
     null(v_proec, uN, uM);
-
+    ///!!!!!!!!!!!!
+    /// !!!!!!!!!!!!!!!!
+    /// 1!!!!!!!!!!!!!!!!!
     /// Задать начальные условия для k w и nuTurbulent
     int it = 0;
     double t =  TAU;
@@ -729,16 +731,16 @@ int main() {
         /// Найти турбулентную вязкость
         for(int i = 0; i <= pN; i++) {
             for(int j = 0; j <= pM; j++) {
-                nuTurbulent[i][j] = k[i][j] / w[i][j];
+                nuTurbulent[i][j] = 0;//k[i][j] / w[i][j];
             }
         }
         /// Интерпалировать nut на сетки u и v
         for(int i = 0; i <= uN; i++) {
             for(int j = 0; j <= uM; j++) {
                 if( (i == 0) || (i == uN) ) {
-                    nutProecU[i][j] = (nuTurbulent[i+1][j] + nuTurbulent[i][j]) / 2.0;
+                    nutProecU[i][j] = (nuTurbulent[i+1][j] + nuTurbulent[i][j]) / 2.0 + NU;
                 } else {
-                    nutProecU[i][j] = equationLine( -u_hx[i-1] / 2.0, u_hx[i] / 2.0, nuTurbulent[i][j], nuTurbulent[i+1][j], 0);
+                    nutProecU[i][j] = equationLine( -u_hx[i-1] / 2.0, u_hx[i] / 2.0, nuTurbulent[i][j], nuTurbulent[i+1][j], 0) + NU;
                 }
             }
         }
@@ -746,9 +748,9 @@ int main() {
         for(int i = 0; i <= vN; i++) {
             for(int j = 0; j <= vM; j++) {
                 if( (j == 0) || (j == vM) ) {
-                    nutProecV[i][j] = (nuTurbulent[i][j+1] + nuTurbulent[i][j]) / 2.0;
+                    nutProecV[i][j] = (nuTurbulent[i][j+1] + nuTurbulent[i][j]) / 2.0 + NU;
                 } else {
-                    nutProecV[i][j] = equationLine( -v_hy[i-1] / 2.0, v_hy[i] / 2.0, nuTurbulent[i][j], nuTurbulent[i][j+1], 0);
+                    nutProecV[i][j] = equationLine( -v_hy[i-1] / 2.0, v_hy[i] / 2.0, nuTurbulent[i][j], nuTurbulent[i][j+1], 0) + NU;
                 }
             }
         }
