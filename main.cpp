@@ -1,12 +1,18 @@
-﻿#include <stdio.h>
-#include <stdlib.h>
+﻿#include <iostream>
 #include <cmath>
 #include "Solvers.h"
+
+#include <map>
+#include <string>
+#include <fstream>
+
+
+using namespace std;
 
 char name_out[100];
 
 
-double F_t(double p1, double p2, double a_x, double b_x) {
+double f_t(double p1, double p2, double a_x, double b_x) {
     return (p2 - p1) / (b_x - a_x);
 }
 double d2dx2(double **vector, int i, int j, double *hx) {
@@ -17,11 +23,11 @@ double d2dy2(double **vector, int i, int j, double *hy) {
 }
 double ddxParabola(double **vector,int i,int j,double *hx) {
     double lamda = hx[i] / hx[i-1];
-    return (vector[i+1][j] - vector[i][j] * (1 - lamda * lamda) - vector[i-1][j] * lamda) / (lamda * (hx[i] + hx[i-1]));
+    return (vector[i+1][j] - vector[i][j] * (1 - lamda * lamda) - vector[i-1][j] * lamda * lamda) / (lamda * (hx[i] + hx[i-1]));
 }
 double ddyParabola(double **vector,int i,int j,double *hy) {
     double lamda = hy[j] / hy[j-1];
-    return (vector[i][j+1] - vector[i][j] * (1 - lamda * lamda) - vector[i][j-1] * lamda) / (lamda * (hy[j] + hy[j-1]));
+    return (vector[i][j+1] - vector[i][j] * (1 - lamda * lamda) - vector[i][j-1] * lamda * lamda) / (lamda * (hy[j] + hy[j-1]));
 }
 void null(double **vector, int lN, int lM) {
     for(int i = 0; i <= lN; i++)
@@ -46,12 +52,6 @@ double norm(double **vector,int lN,int lM) {
 double equationLine(double x1, double x2, double y1, double y2, double x) {
     double y = ( (x - x1) / (x2 - x1) * (y2 - y1) ) + y1;
     return y;
-}
-double gradP_u(double** p, int i, int j, double hxPrev, double hxNext) {
-    return ( 2 * (p[i+1][j] - p[i][j]) * hxPrev ) / pow((hxPrev + hxNext),2);
-}
-double gradP_v(double** p, int i, int j, double hyPrev, double hyNext) {
-    return ( 2 * (p[i][j+1] - p[i][j]) * hyPrev ) / pow((hyPrev + hyNext),2);
 }
 double operatorPressure(int lN, int lM, double **vector, int i, int j, double *hx, double *hy) {
     if(i == 0) {
@@ -208,7 +208,7 @@ void solveByBCGstab(double p1, double p2, double TAU, int lN, int lM, double **p
     Sn=NULL;
     Tn=NULL;
 }
-void SolveTransportU(double p1, double p2, double TAU, double a_x, double b_x, double NU, double **u,double **u_n,double **v_n, double **nuTurbulent, int lN,int lM,double *hx,double *hy)
+void solveTransportU(double p1, double p2, double TAU, double a_x, double b_x, double **u,double **u_n,double **v_n, double **nuTurbulent, int lN,int lM,double *hx,double *hy)
 {
     double *u_temp_x=new double[lN+1];
     double *u_temp_y=new double[lM+1];
@@ -246,19 +246,19 @@ void SolveTransportU(double p1, double p2, double TAU, double a_x, double b_x, d
                 A[j]=0;
                 B[j]=1.0/2.0;
                 C[j]=1.0/2.0;
-                F[j]=0 + TAU * F_t(p1, p2, a_x, b_x);
+                F[j]=0 + TAU * f_t(p1, p2, a_x, b_x);
             }
             else if(j == lM)
             {
                 A[j]=1.0/2.0;
                 B[j]=1.0/2.0;
                 C[j]=0;
-                F[j]=0 + TAU * F_t(p1, p2, a_x, b_x);
+                F[j]=0 + TAU * f_t(p1, p2, a_x, b_x);
             }
             else
             {
                 double lamda = hy[j] / hy[j-1];
-                A[j] =  - v_n[i][j] / (hy[j] + hy[j-1]) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j-1] ) * nuTurbulent[i][j] + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] )  / ( (hy[j] + hy[j-1]) * hy[j-1] );
+                A[j] =  - v_n[i][j] * lamda / (hy[j] + hy[j-1]) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j-1] ) * nuTurbulent[i][j] + ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] )  / ( (hy[j] + hy[j-1]) * hy[j-1] );
                 B[j] =  2.0/TAU - nuTurbulent[i][j] * (- 1.0 / hy[j] - 1.0 / hy[j-1] ) / ( (hy[j] + hy[j-1])/2.0 ) + v_n[i][j] * ( - (1 - lamda * lamda) / (lamda * (hy[j] + hy[j-1])) ) + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] ) * ( - (1 - lamda * lamda) / (lamda * (hy[j] + hy[j-1])) );
                 C[j] =  v_n[i][j] / (lamda * (hy[j] + hy[j-1])) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j] ) * nuTurbulent[i][j] + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] ) / ( (hy[j] + hy[j-1]) * hy[j] );
                 F[j] =  - u_n[i][j] * ddxParabola(u_n,i,j,hx) + nuTurbulent[i][j] * d2dx2(u_n,i,j,hx) + 2.0*u_n[i][j]/TAU + /*ddxParabola(nuTurbulent, i, j, hx)*/( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) * ddxParabola(u_n, i, j, hx);
@@ -315,7 +315,7 @@ void SolveTransportU(double p1, double p2, double TAU, double a_x, double b_x, d
                 else
                 {
                     double lamda = hx[i] / hx[i-1];
-                    A[i] =  - u_n[i][j] / (hx[i] + hx[i-1]) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i-1] ) * nuTurbulent[i][j] + /*ddxParabola(nuTurbulent, i, j, hx)*/( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) / ( (hx[i] + hx[i-1]) * hx[i-1] );
+                    A[i] =  - u_n[i][j] * lamda / (hx[i] + hx[i-1]) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i-1] ) * nuTurbulent[i][j] + /*ddxParabola(nuTurbulent, i, j, hx)*/( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) / ( (hx[i] + hx[i-1]) * hx[i-1] );
                     B[i] =  2.0/TAU - nuTurbulent[i][j] * (- 1.0 / hx[i] - 1.0 / hx[i-1] ) / ( (hx[i] + hx[i-1])/2.0 ) + u_n[i][j] * ( - (1 - lamda * lamda) / (lamda * (hx[i] + hx[i-1])) ) + /*ddxParabola(nuTurbulent, i, j, hx)*/ ( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) * ( - (1 - lamda * lamda) / (lamda * (hx[i] + hx[i-1])) );
                     C[i] =  u_n[i][j] / (lamda * (hx[i] + hx[i-1])) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i] ) * nuTurbulent[i][j] + /*ddxParabola(nuTurbulent, i, j, hx)*/ ( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) / ( (hx[i] + hx[i-1]) * hx[i] );
                     F[i] =  - v_n[i][j] * ddyParabola(u_1_2,i,j,hy) + nuTurbulent[i][j] * d2dy2(u_1_2,i,j,hy) +2.0*u_1_2[i][j]/TAU + ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] ) * ddyParabola(u_1_2, i, j, hy);
@@ -330,8 +330,8 @@ void SolveTransportU(double p1, double p2, double TAU, double a_x, double b_x, d
 
         for(int i=1;i<lN;i++)
         {
-            u[i][0]= ( 0 + TAU * F_t(p1, p2, a_x, b_x) ) * 2  - u[i][1];
-            u[i][lM]= ( 0 + TAU * F_t(p1, p2, a_x, b_x) ) * 2  - u[i][lM-1];
+            u[i][0]= ( 0 + TAU * f_t(p1, p2, a_x, b_x) ) * 2  - u[i][1];
+            u[i][lM]= ( 0 + TAU * f_t(p1, p2, a_x, b_x) ) * 2  - u[i][lM-1];
         }
 
 
@@ -354,7 +354,7 @@ void SolveTransportU(double p1, double p2, double TAU, double a_x, double b_x, d
     u_temp_x=NULL;
     u_temp_y=NULL;
 }
-void SolveTransportV(double p1, double p2, double TAU, double a_x, double b_x, double NU, double **u,double **u_n,double **v_n, double **nuTurbulent, int lN,int lM,double *hx,double *hy) {
+void solveTransportV(double TAU, double **u,double **u_n,double **v_n, double **nuTurbulent, int lN,int lM,double *hx,double *hy) {
     double *u_temp_x=new double[lN+1];
     double *u_temp_y=new double[lM+1];
 
@@ -398,7 +398,7 @@ void SolveTransportV(double p1, double p2, double TAU, double a_x, double b_x, d
                 F[j]=0;
              } else {
                 double lamda = hy[j] / hy[j-1];
-                A[j] =  - v_n[i][j] / (hy[j] + hy[j-1]) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j-1] ) * nuTurbulent[i][j] + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] )  / ( (hy[j] + hy[j-1]) * hy[j-1] );
+                A[j] =  - v_n[i][j] * lamda / (hy[j] + hy[j-1]) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j-1] ) * nuTurbulent[i][j] + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] )  / ( (hy[j] + hy[j-1]) * hy[j-1] );
                 B[j] =  2.0/TAU - nuTurbulent[i][j] * (- 1.0 / hy[j] - 1.0 / hy[j-1] ) / ( (hy[j] + hy[j-1])/2.0 ) + v_n[i][j] * ( - (1 - lamda * lamda) / (lamda * (hy[j] + hy[j-1])) ) + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] ) * ( - (1 - lamda * lamda) / (lamda * (hy[j] + hy[j-1])) );
                 C[j] =  v_n[i][j] / (lamda * (hy[j] + hy[j-1])) - 2.0 / ( (hy[j] + hy[j-1]) * hy[j] ) * nuTurbulent[i][j] + /*ddyParabola(nuTurbulent, i, j, hy)*/ ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] ) / ( (hy[j] + hy[j-1]) * hy[j] );
                 F[j] =  - u_n[i][j] * ddxParabola(u_n,i,j,hx) + nuTurbulent[i][j] * d2dx2(u_n,i,j,hx) + 2.0*u_n[i][j]/TAU + /*ddxParabola(nuTurbulent, i, j, hx)*/( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) * ddxParabola(u_n, i, j, hx);
@@ -447,7 +447,7 @@ void SolveTransportV(double p1, double p2, double TAU, double a_x, double b_x, d
                 F[i]=0;
             } else {
                 double lamda = hx[i] / hx[i-1];
-                A[i] =  - u_n[i][j] / (hx[i] + hx[i-1]) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i-1] ) * nuTurbulent[i][j] + /*ddxParabola(nuTurbulent, i, j, hx)*/( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) / ( (hx[i] + hx[i-1]) * hx[i-1] );
+                A[i] =  - u_n[i][j] * lamda / (hx[i] + hx[i-1]) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i-1] ) * nuTurbulent[i][j] + /*ddxParabola(nuTurbulent, i, j, hx)*/( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) / ( (hx[i] + hx[i-1]) * hx[i-1] );
                 B[i] =  2.0/TAU - nuTurbulent[i][j] * (- 1.0 / hx[i] - 1.0 / hx[i-1] ) / ( (hx[i] + hx[i-1])/2.0 ) + u_n[i][j] * ( - (1 - lamda * lamda) / (lamda * (hx[i] + hx[i-1])) ) + /*ddxParabola(nuTurbulent, i, j, hx)*/ ( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) * ( - (1 - lamda * lamda) / (lamda * (hx[i] + hx[i-1])) );
                 C[i] =  u_n[i][j] / (lamda * (hx[i] + hx[i-1])) - 2.0 / ( (hx[i] + hx[i-1]) * hx[i] ) * nuTurbulent[i][j] + /*ddxParabola(nuTurbulent, i, j, hx)*/ ( (nuTurbulent[i][j] - nuTurbulent[i-1][j]) / hx[i-1] ) / ( (hx[i] + hx[i-1]) * hx[i] );
                 F[i] =  - v_n[i][j] * ddyParabola(u_1_2,i,j,hy) + nuTurbulent[i][j] * d2dy2(u_1_2,i,j,hy) +2.0*u_1_2[i][j]/TAU + ( (nuTurbulent[i][j] - nuTurbulent[i][j-1]) / hy[j-1] ) * ddyParabola(u_1_2, i, j, hy);
@@ -478,6 +478,343 @@ void SolveTransportV(double p1, double p2, double TAU, double a_x, double b_x, d
     u_temp_x=NULL;
     u_temp_y=NULL;
 }
+void solveTransportK(double BETTA, double TAU, double NU, double SIGMA, double **k, double **k_n, double **omega, double **u, double **uClassic, double **v, double **vClassic, double **tau11, double **tau12, double **tau21, double **tau22, int lN,int lM, double *hx, double *hy, double *u_hx, double *v_hy)
+{
+    double *k_temp_x=new double[lN+1];
+    double *k_temp_y=new double[lM+1];
+
+    double **k_1_2=new double*[lN+1];
+    for(int i=0;i<=lN;i++)
+        k_1_2[i]=new double[lM+1];
+    double **func=new double*[lN+1];
+    for(int i=0;i<=lN;i++)
+        func[i]=new double[lM+1];
+
+
+    for(int i=0;i<=lN;i++)
+        for(int j=0;j<=lM;j++)
+        {
+            k_1_2[i][j] = 0;
+            func[i][j] = NU + SIGMA * k_n[i][j] / omega[i][j];
+        }
+
+
+    double *A=new double[lM+1];
+    double *B=new double[lM+1];
+    double *C=new double[lM+1];
+    double *F=new double[lM+1];
+
+    for(int j=0;j<=lM;j++)
+    {
+        A[j]=0;
+        B[j]=0;
+        C[j]=0;
+        F[j]=0;
+    }
+
+    for(int i=1;i<lN;i++)
+    {
+        for(int j = 0; j<=lM; j++)
+        {
+            if(j == 0)
+            {
+                A[j]=0;
+                B[j]=1.0/2.0;
+                C[j]=1.0/2.0;
+                F[j]=0;
+            }
+            else if(j == lM)
+            {
+                A[j]=1.0/2.0;
+                B[j]=1.0/2.0;
+                C[j]=0;
+                F[j]=0;
+            }
+            else
+            {
+                A[j] = -v[i][j] / (hy[j-1]) - ( (func[i][j] - func[i][j-1]) / hy[j-1] * ( - 1.0 / hy[j-1] ) - func[i][j] * 2.0 / ( (hy[j] + hy[j-1]) * hy[j-1] ) );
+                B[j] = 2.0/TAU + v[i][j] / (hy[j-1]) - (func[i][j] - func[i][j-1]) / hy[j-1] *     1.0 / hy[j-1] - func[i][j] * (- 1.0 / hy[j] - 1.0 / hy[j-1] ) / ( (hy[j] + hy[j-1])/2.0 );
+                C[j] = - func[i][j] * 2.0 / ( (hy[j] + hy[j-1]) * hy[j] ) ;
+                F[j] =  - u[i][j] * ( k_n[i][j] - k_n[i-1][j] ) / hx[i-1] + 2.0*k_n[i][j]/TAU +
+                        (
+                            tau11[i][j] * ( uClassic[i][j] - uClassic[i-1][j] ) / u_hx[i-1] +
+                            tau12[i][j] * ddyParabola(u, i, j, hy)                        +
+                            tau21[i][j] * ddxParabola(v, i, j, hx)                        +
+                            tau22[i][j] * ( vClassic[i][j] - vClassic[i][j-1] ) / v_hy[j-1]
+                        )
+                - BETTA * k_n[i][j] * omega[i][j] + ( (func[i][j] - func[i-1][j] ) / hx[i-1] * (k_n[i][j] - k_n[i-1][j] ) / hx[i-1] + func[i][j] * d2dx2(k, i, j, hx) );
+            }
+        }
+        SolveByScalarRun(lM,k_temp_y,A,B,C,F);
+
+        for(int j=0;j<=lM;j++)
+            k_1_2[i][j] = k_temp_y[j];
+
+        }
+
+        for(int i=0;i<=lN;i++)
+        {
+            for(int j=0;j<=lM;j++)
+            {
+                k[i][j]=k_1_2[i][j];
+            }
+        }
+
+        delete []A;
+        delete []B;
+        delete []C;
+        delete []F;
+
+
+        A=new double[lN+1];
+        B=new double[lN+1];
+        C=new double[lN+1];
+        F=new double[lN+1];
+
+
+        for(int j=1;j<lM;j++)
+        {
+            for(int i = 0; i<=lN; i++)
+            {
+                if(i == 0)
+                {
+                    A[i] = 0;
+                    B[i] = 1.0 / 2.0;
+                    C[i] = 1.0 / 2.0;
+                    F[i] = 0;
+                }
+                else if(i == lN)
+                {
+                    A[i] = -1.0 / hx[i-1];
+                    B[i] = 1.0 / hx[i-1];
+                    C[i] = 0;
+                    F[i] = 0;
+                }
+                else
+                {
+                    A[i] = -u[i][j] / (hx[i-1]) - ( (func[i][j] - func[i-1][j]) / hx[i-1] * ( - 1.0 / hx[i-1] ) - func[i][j] * 2.0 / ( (hx[i] + hx[i-1]) * hx[i-1] ) );
+                    B[i] = 2.0/TAU - func[i][j] * (- 1.0 / hx[i] - 1.0 / hx[i-1] ) / ( (hx[i] + hx[i-1])/2.0 ) + u[i][j] / (hx[i-1]) -  (func[i][j] - func[i-1][j]) / hx[i-1] * 1.0 / hx[i-1] ;
+                    C[i] =  - func[i][j] * 2.0 / ( (hx[i] + hx[i-1]) * hx[i]   ) ;
+                    F[i] =  - v[i][j] * ( k_1_2[i][j] - k_1_2[i][j-1] ) / hy[j-1] + 2.0*k_1_2[i][j]/TAU +
+                            (
+                                tau11[i][j] * ( uClassic[i][j] - uClassic[i-1][j] ) / u_hx[i-1] +
+                                tau12[i][j] * ddyParabola(u, i, j, hy)                        +
+                                tau21[i][j] * ddxParabola(v, i, j, hx)                        +
+                                tau22[i][j] * ( vClassic[i][j] - vClassic[i][j-1] ) / v_hy[j-1]
+                            )
+                    - BETTA * k_1_2[i][j] * omega[i][j] + ( (func[i][j] - func[i][j-1] ) / hy[j-1] * (k_n[i][j] - k_n[i][j-1] ) / hy[j-1] + func[i][j] * d2dy2(k, i, j, hy) );
+                }
+            }
+        SolveByScalarRun(lN,k_temp_x,A,B,C,F);
+
+        for(int i=0;i<=lN;i++)
+            k[i][j] = k_temp_x[i];
+        }
+
+        for(int i=1;i<lN;i++)
+        {
+            k[i][0]= - k[i][1];
+            k[i][lM]= - k[i][lM-1];
+        }
+
+
+    for(int i=0;i<=lN;i++)
+    {
+        delete []k_1_2[i];
+    }
+    delete []k_1_2;
+    delete []A;
+    delete []B;
+    delete []C;
+    delete []F;
+    delete []k_temp_x;
+    delete []k_temp_y;
+    k_1_2=NULL;
+    A=NULL;
+    B=NULL;
+    C=NULL;
+    F=NULL;
+    k_temp_x=NULL;
+    k_temp_y=NULL;
+}
+void solveTransportW(double ALPHA, double BETTA, double TAU, double NU, double SIGMA, double **w, double **w_n, double **k, double **u, double **uClassic, double **v, double **vClassic, double **tau11, double **tau12, double **tau21, double **tau22, int lN,int lM, double *hx, double *hy, double *u_hx, double *v_hy)
+{
+    double *w_temp_x=new double[lN+1];
+    double *w_temp_y=new double[lM+1];
+
+    double **SIGMAd=new double*[lN+1];
+    for(int i=0;i<=lN;i++)
+        SIGMAd[i]=new double[lM+1];
+    double **w_1_2=new double*[lN+1];
+    for(int i=0;i<=lN;i++)
+        w_1_2[i]=new double[lM+1];
+    double **func=new double*[lN+1];
+    for(int i=0;i<=lN;i++)
+        func[i]=new double[lM+1];
+
+
+    for(int i=0;i<=lN;i++)
+        for(int j=0;j<=lM;j++)
+        {
+            w_1_2[i][j] = 0;
+            func[i][j] = NU + SIGMA * k[i][j] / w_n[i][j];
+        }
+    null(SIGMAd, lN, lM);
+    double temp = 0;
+    for(int i=1;i<lN;i++)
+        for(int j=1;j<lM;j++)
+        {
+            temp = ( ( k[i][j] - k[i-1][j] ) / hx[i-1] * ( w_n[i][j] - w_n[i-1][j] ) / hx[i-1] )
+                 + ( ( k[i][j] - k[i][j-1] ) / hy[j-1] * ( w_n[i][j] - w_n[i][j-1] ) / hy[j-1] );
+            if(temp < 0) {
+               SIGMAd[i][j] = 0;
+            } else {
+               SIGMAd[i][j] = 0.3;
+            }
+        }
+
+    double *A=new double[lM+1];
+    double *B=new double[lM+1];
+    double *C=new double[lM+1];
+    double *F=new double[lM+1];
+
+    for(int j=0;j<=lM;j++)
+    {
+        A[j]=0;
+        B[j]=0;
+        C[j]=0;
+        F[j]=0;
+    }
+
+    for(int i=1;i<lN;i++)
+    {
+        for(int j = 0; j<=lM; j++)
+        {
+            if(j == 0)
+            {
+                A[j]=0;
+                B[j]=1.0/2.0;
+                C[j]=1.0/2.0;
+                F[j]= 10 * 6 * NU / (BETTA * hy[j] * hy[j]);
+            }
+            else if(j == lM)
+            {
+                A[j]=1.0/2.0;
+                B[j]=1.0/2.0;
+                C[j]=0;
+                F[j]= 10 * 6 * NU / (BETTA * hy[j-1] * hy[j-1]);
+            }
+            else
+            {
+                A[j] = -v[i][j] / (hy[j-1]) + SIGMAd[i][j] / w_n[i][j] * ( k[i][j] - k[i][j-1] ) / hy[j-1] * 1.0 / hy[j-1] + ( func[i][j] - func[i][j-1] ) / hy[j-1] * 1.0 / hy[j-1] - func[i][j] * 2.0 / (hy[j-1] * (hy[j] + hy[j-1]));
+                B[j] = 2.0/TAU + v[i][j] / (hy[j-1]) - SIGMAd[i][j] / w_n[i][j] * ( k[i][j] - k[i][j-1] ) / hy[j-1] * 1.0 / hy[j-1] - ( func[i][j] - func[i][j-1] ) / hy[j-1] * 1.0 / hy[j-1] - func[i][j] * (- 1.0 / hy[j] - 1.0 / hy[j-1] ) / ( (hy[j] + hy[j-1])/2.0 );
+                C[j] = - func[i][j] * 2.0 / ( (hy[j] + hy[j-1]) * hy[j]  );
+                F[j] =  - u[i][j] * ( w_n[i][j] - w_n[i-1][j] ) / hx[i-1] + 2.0*w_n[i][j]/TAU + ALPHA * w_n[i][j] / k[i][j] *
+                        (
+                            tau11[i][j] * ( uClassic[i][j] - uClassic[i-1][j] ) / u_hx[i-1] +
+                            tau12[i][j] * ddyParabola(u, i, j, hy)                        +
+                            tau21[i][j] * ddxParabola(v, i, j, hx)                        +
+                            tau22[i][j] * ( vClassic[i][j] - vClassic[i][j-1] ) / v_hy[j-1]
+                        )
+                + ( (func[i][j] - func[i-1][j] ) / hx[i-1] * (w_n[i][j] - w_n[i-1][j] ) / hx[i-1] + func[i][j] * d2dx2(w_n, i, j, hx) )
+                + (  SIGMAd[i][j] / w_n[i][j] * (k[i][j] - k[i-1][j] ) / hx[i-1] * (w_n[i][j] - w_n[i-1][j] ) / hx[i-1] );
+            }
+        }
+        SolveByScalarRun(lM,w_temp_y,A,B,C,F);
+
+        for(int j=0;j<=lM;j++)
+            w_1_2[i][j] = w_temp_y[j];
+
+        }
+
+        for(int i=0;i<=lN;i++)
+        {
+            for(int j=0;j<=lM;j++)
+            {
+                w[i][j]=w_1_2[i][j];
+            }
+        }
+
+        delete []A;
+        delete []B;
+        delete []C;
+        delete []F;
+
+
+        A=new double[lN+1];
+        B=new double[lN+1];
+        C=new double[lN+1];
+        F=new double[lN+1];
+
+
+        for(int j=1;j<lM;j++)
+        {
+            for(int i = 0; i<=lN; i++)
+            {
+                if(i == 0)
+                {
+                    A[i] = 0;
+                    B[i] = 1.0 / 2.0;
+                    C[i] = 1.0 / 2.0;
+                    F[i] = 1.0 / (10 * 5.0 / 1.0);
+                }
+                else if(i == lN)
+                {
+                    A[i] = -1.0 / hx[i-1];
+                    B[i] = 1.0 / hx[i-1];
+                    C[i] = 0;
+                    F[i] = 0;
+                }
+                else
+                {
+                    A[i] = -u[i][j] / (hx[i-1]) + SIGMAd[i][j] / w_n[i][j] * ( k[i][j] - k[i-1][j] ) / hx[i-1] * 1.0 / hx[i-1] + ( func[i][j] - func[i-1][j] ) / hx[i-1] * 1.0 / hx[i-1] - func[i][j] * 2.0 / (hx[i-1] * (hx[i] + hx[i-1]));
+                    B[i] = 2.0/TAU + u[i][j] / (hx[i-1]) - SIGMAd[i][j] / w_n[i][j] * ( k[i][j] - k[i-1][j] ) / hx[i-1] * 1.0 / hx[i-1] - ( func[i][j] - func[i-1][j] ) / hx[i-1] * 1.0 / hx[i-1] - func[i][j] * (- 1.0 / hx[i] - 1.0 / hx[i-1] ) / ( (hx[i] + hx[i-1])/2.0 );
+                    C[i] = - func[i][j] * 2.0 / ( (hx[i] + hx[i-1]) * hx[i]  );
+                    F[i] =  - v[i][j] * ( w_1_2[i][j] - w_1_2[i][j-1] ) / hy[j-1] + 2.0*w_1_2[i][j]/TAU + ALPHA * w_1_2[i][j] / k[i][j] *
+                            (
+                                tau11[i][j] * ( uClassic[i][j] - uClassic[i-1][j] ) / u_hx[i-1] +
+                                tau12[i][j] * ddyParabola(u, i, j, hy)                        +
+                                tau21[i][j] * ddxParabola(v, i, j, hx)                        +
+                                tau22[i][j] * ( vClassic[i][j] - vClassic[i][j-1] ) / v_hy[j-1]
+                            )
+                    + ( (func[i][j] - func[i][j-1] ) / hy[j-1] * (w_1_2[i][j] - w_n[i][j-1] ) / hy[j-1] + func[i][j] * d2dy2(w_1_2, i, j, hy) )
+                    + (  SIGMAd[i][j] / w_n[i][j] * (k[i][j] - k[i][j-1] ) / hy[j-1] * (w_1_2[i][j] - w_1_2[i][j-1] ) / hy[j-1] );
+                }
+            }
+        SolveByScalarRun(lN,w_temp_x,A,B,C,F);
+
+        for(int i=0;i<=lN;i++)
+            w[i][j] = w_temp_x[i];
+        }
+
+        for(int i=1;i<lN;i++)
+        {
+            w[i][0]  = (10 * 6 * NU / (BETTA * hy[0] * hy[0]) ) * 2 - w[i][1];
+            w[i][lM] = (10 * 6 * NU / (BETTA * hy[lM-1] * hy[lM-1]) ) * 2 - w[i][lM-1];
+        }
+
+
+    for(int i=0;i<=lN;i++)
+    {
+        delete []w_1_2[i];
+    }
+    delete []w_1_2;
+    delete []A;
+    delete []B;
+    delete []C;
+    delete []F;
+    delete []w_temp_x;
+    delete []w_temp_y;
+    w_1_2=NULL;
+    A=NULL;
+    B=NULL;
+    C=NULL;
+    F=NULL;
+    w_temp_x=NULL;
+    w_temp_y=NULL;
+}
+
+
 void Print(FILE *f,int t, int lN, int lM, double *x, double *y, double **u,double **v, double **p) {
     fprintf(f, "TITLE = \"PROTEKANIE\"\n");
     fprintf(f, "VARIABLES = \"X\",\"Y\",\"U\",\"V\",\"P\"\n");
@@ -491,34 +828,133 @@ void Print(FILE *f,int t, int lN, int lM, double *x, double *y, double **u,doubl
         }
     }
 }
+void out(int it, int N, int M, int input, double *x, double *y, double **p_out, double **u_out, double **v_out, double *hx, double *hy, double **p, double **u, double **v) {
+    for(int i=0;i<=N;i++) {
+        for(int j=0;j<=M;j++) {
+            if(   (i==0 && j==0)   ||   (i==0 && j==M)   ||    (i == N && j == 0)   ||   (i == N && j == M)     ) {
+                p_out[i][j] = 0;
+                v_out[i][j]=0;
+                u_out[i][j]=0;
+            } else if(i == 0 || i == N) {
+                u_out[i][j] = equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, u[i][j], u[i][j+1], 0);
+                v_out[i][j] = (v[i][j] + v[i+1][j]) / 2.0;
+                p_out[i][j] =
+                                (
+                                    equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, p[i][j], p[i][j+1], 0)
+                                  + equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, p[i+1][j], p[i+1][j+1], 0)
+                                ) / 2.0;
+            } else if(j == 0 || j == M) {
+                u_out[i][j] = (u[i][j] + u[i][j+1]) / 2.0;
+                v_out[i][j] = equationLine( -hx[i-1] / 2.0, hx[i] / 2.0, v[i][j], v[i+1][j], 0);
+                p_out[i][j] =
+                                (
+                                    equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, p[i][j], p[i][j+1], 0)
+                                  + equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, p[i+1][j], p[i+1][j+1], 0)
+                                ) / 2.0;
+            } else {
+                u_out[i][j] = equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, u[i][j], u[i][j+1], 0);
+                v_out[i][j] = equationLine( -hx[i-1] / 2.0, hx[i] / 2.0, v[i][j], v[i+1][j], 0);
+                p_out[i][j] = equationLine
+                        (
+                            -hx[i-1] / 2.0,
+                            hx[i] / 2.0,
+                            equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, p[i][j], p[i][j+1], 0),
+                            equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, p[i+1][j], p[i+1][j+1], 0),
+                            0
+                        );
+            }
+        }
+    }
+    p_out[0][0] = p_out[0][1];
+    p_out[0][M] = p_out[0][M-1];
+    p_out[N][0] = p_out[N][1];
+    p_out[N][M] = p_out[N][M-1];
 
-const double a_x = 0, b_x = 3;
-const double a_y = 0, b_y = 1;
+    sprintf(name_out,"./Solve/Zone_%d.dat",it);
+    if( it % input == 0 ) {
+        FILE *f = fopen(name_out,"w");
+        Print(f, it, N, M, x, y, u_out, v_out, p_out);
+        fclose(f);
+    }
+}
 
-const int N = 30;
-const int M = 10;
-
-const int uN = N;
-const int uM = M + 1;
-
-const int vN = N + 1;
-const int vM = M;
-
-const int pN = N + 1;
-const int pM = M + 1;
+string extractLeft(const string& buf, size_t i) {
+    size_t left = 0;
+    while(buf[left] == ' ')
+        ++left;
+    size_t right = i-1;
+    while(buf[right] == ' ')
+        --right;
+    return buf.substr(left, right-left+1);
+}
+string extractRight(const string& buf, size_t i) {
+    size_t left = i+1;
+    while(buf[left] == ' ')
+        ++left;
+    size_t right = buf.size()-1;
+    while(buf[right] == ' ')
+        --right;
+    return buf.substr(left, right-left+1);
+}
+map<string, string> parseDict(const string& filename) {
+    ifstream file(filename);
+    if(!file.is_open())
+        throw runtime_error("Cant open file: " + filename);
+    string buffer;
+    map<string, string> tmp;
+    while(!file.eof()) {
+        getline(file, buffer);
+        //cout << buffer << endl;
+        size_t i = buffer.find('=', 0);
+        if(i != string::npos) {
+            tmp.emplace(extractLeft(buffer, i), extractRight(buffer, i));
+        }
+    }
+    return tmp;
+}
 
 const int input = 10;
-
 const double T = 10;
 
-const double NU = 0.01;
-const double TAU = 0.01;
+const double SIGMA  = 0.5;
+const double ALPHA  = 5.0 / 9.0;
 
-
-const double p1 = 1;
-const double p2 = 0;
+const double BETTAS = 0.09;
+const double BETTA  = 0.075;
 
 int main() {
+    map<string, string> dict = parseDict("input.txt");
+    const int N = stoi(dict["Number X"]);
+    cout << "N: " << N << endl;
+    const int M = stoi(dict["Number Y"]);
+    cout << "M: " << M << endl;
+    const double p1 = stod(dict["Pressure inlet"]);
+    cout << "p1: " << p1 << endl;
+    const double p2 = stod(dict["Pressure outlet"]);
+    cout << "p2: " << p2 << endl;
+    const double NU = stod(dict["NU"]);
+    cout << "NU: " << NU << endl;
+    const double TAU = stod(dict["TAU"]);
+    cout << "TAU: " << TAU << endl;
+    const double a_x = stod(dict["AX"]);
+    cout << "a_x: " << a_x << endl;
+    const double b_x = stod(dict["BX"]);
+    cout << "b_x: " << b_x << endl;
+    const double a_y = stod(dict["AY"]);
+    cout << "a_y: " << a_y << endl;
+    const double b_y = stod(dict["BY"]);
+    cout << "b_y: " << b_y << endl;
+
+
+    const int uN = N;
+    const int uM = M + 1;
+
+    const int vN = N + 1;
+    const int vM = M;
+
+    const int pN = N + 1;
+    const int pM = M + 1;
+
     double *hx = new double[N];
     double *hy = new double[M];
 
@@ -543,8 +979,6 @@ int main() {
     for(int i = (M - 1) - (M / 3 - 1); i <= (M - 1); i++) {
         hy[i] = h;
     }
-
-
     h = ( (b_y - 0.1) - (a_y + 0.1) ) / (M - (M / 3 - 1) * 2 );
     for(int i = M / 3 - 1; i <= (M - 1) - (M / 3 - 1); i++) {
         hy[i] = h;
@@ -635,6 +1069,10 @@ int main() {
     for(int i = 0; i <= pN; i++)
         k[i] = new double[pM + 1];
 
+    double **k_n = new double*[pN + 1];
+    for(int i = 0; i <= pN; i++)
+        k_n[i] = new double[pM + 1];
+
     double **S11 = new double*[pN + 1];
     for(int i = 0; i <= pN; i++)
         S11[i] = new double[pM + 1];
@@ -664,6 +1102,10 @@ int main() {
     double **w = new double*[pN + 1];
     for(int i = 0; i <= pN; i++)
         w[i] = new double[pM + 1];
+
+    double **w_n = new double*[pN + 1];
+    for(int i = 0; i <= pN; i++)
+        w_n[i] = new double[pM + 1];
 
     double **nuTurbulent = new double*[pN + 1];
     for(int i = 0; i <= pN; i++)
@@ -719,21 +1161,19 @@ int main() {
     null(v, vN, vM);
     null(u_proec, vN, vM);
     null(v_proec, uN, uM);
-    ///!!!!!!!!!!!!
-    /// !!!!!!!!!!!!!!!!
-    /// 1!!!!!!!!!!!!!!!!!
-    /// Задать начальные условия для k w и nuTurbulent
+
+    for(int i = 0; i <= pN; i++) {
+        for(int j = 0; j <= pM; j++) {
+            w[i][j] = 1;
+        }
+    }
+
     int it = 0;
     double t =  TAU;
     while(t <= T) {
         it++;
 
-        /// Найти турбулентную вязкость
-        for(int i = 0; i <= pN; i++) {
-            for(int j = 0; j <= pM; j++) {
-                nuTurbulent[i][j] = 0;//k[i][j] / w[i][j];
-            }
-        }
+
         /// Интерпалировать nut на сетки u и v
         for(int i = 0; i <= uN; i++) {
             for(int j = 0; j <= uM; j++) {
@@ -769,8 +1209,8 @@ int main() {
             }
         }
 
-        SolveTransportU(p1, p2, TAU, a_x, b_x, NU, u, u_n, v_proec, nutProecU, uN, uM, u_hx, u_hy);
-        SolveTransportV(p1, p2, TAU, a_x, b_x, NU, v, v_n, u_proec, nutProecV, vN, vM, v_hx, v_hy);
+        solveTransportU(p1, p2, TAU, a_x, b_x, u, u_n, v_proec, nutProecU, uN, uM, u_hx, u_hy);
+        solveTransportV(TAU, v, v_n, u_proec, nutProecV, vN, vM, v_hx, v_hy);
         solveByBCGstab(p1, p2, TAU, pN, pM, p, u, v, p_hx, p_hy, u_hx, v_hy);
 
         for(int i = 0; i <= uN; i++)
@@ -815,59 +1255,40 @@ int main() {
             }
         }
         /// Найти k
-        /// Найти w
-
-        for(int i=0;i<=N;i++) {
-            for(int j=0;j<=M;j++) {
-                if(   (i==0 && j==0)   ||   (i==0 && j==M)   ||    (i == N && j == 0)   ||   (i == N && j == M)     ) {
-                    p_out[i][j] = 0;
-                    v_out[i][j]=0;
-                    u_out[i][j]=0;
-                } else if(i == 0 || i == N) {
-                    u_out[i][j] = equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, u[i][j], u[i][j+1], 0);
-                    v_out[i][j] = (v[i][j] + v[i+1][j]) / 2.0;
-                    p_out[i][j] =
-                                    (
-                                        equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, p[i][j], p[i][j+1], 0)
-                                      + equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, p[i+1][j], p[i+1][j+1], 0)
-                                    ) / 2.0;
-                } else if(j == 0 || j == M) {
-                    u_out[i][j] = (u[i][j] + u[i][j+1]) / 2.0;
-                    v_out[i][j] = equationLine( -hx[i-1] / 2.0, hx[i] / 2.0, v[i][j], v[i+1][j], 0);
-                    p_out[i][j] =
-                                    (
-                                        equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, p[i][j], p[i][j+1], 0)
-                                      + equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, p[i+1][j], p[i+1][j+1], 0)
-                                    ) / 2.0;
-                } else {
-                    u_out[i][j] = equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, u[i][j], u[i][j+1], 0);
-                    v_out[i][j] = equationLine( -hx[i-1] / 2.0, hx[i] / 2.0, v[i][j], v[i+1][j], 0);
-                    p_out[i][j] = equationLine
-                            (
-                                -hx[i-1] / 2.0,
-                                hx[i] / 2.0,
-                                equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, p[i][j], p[i][j+1], 0),
-                                equationLine( -hy[j-1] / 2.0, hy[j] / 2.0, p[i+1][j], p[i+1][j+1], 0),
-                                0
-                            );
-                }
+        solveTransportK(BETTAS, TAU, NU, SIGMA, k, k_n, w, u_proecNut, u, v_proecNut, v, tau11, tau12, tau21, tau22, pN, pM, p_hx, p_hy, u_hx, v_hy);
+        for(int i = 0; i <= pN; i++) {
+            for(int j = 0; j <= pM; j++) {
+                printf("%lf ", k[i][j]);
             }
-        }
-        p_out[0][0] = p_out[0][1];
-        p_out[0][M] = p_out[0][M-1];
-        p_out[N][0] = p_out[N][1];
-        p_out[N][M] = p_out[N][M-1];
-
-        sprintf(name_out,"./Solve/Zone_%d.dat",it);
-        if( it % input == 0 ) {
-            FILE *f = fopen(name_out,"w");
-            Print(f, it, N, M, x, y, u_out, v_out, p_out);
-            fclose(f);
+            printf("\n");
         }
 
+        printf("\n");
+        printf("\n");
+        printf("\n");
+        /// Найти w
+        solveTransportW(ALPHA, BETTA, TAU, NU, SIGMA, w, w_n, k, u_proecNut, u, v_proecNut, v, tau11, tau12, tau21, tau22, pN, pM, p_hx, p_hy, u_hx, v_hy);
+        for(int i = 0; i <= pN; i++) {
+            for(int j = 0; j <= pM; j++) {
+                printf("%lf ", w[i][j]);
+            }
+            printf("\n");
+        }
+   return 0;
+
+        out(it,N,M,input, x,y,p_out,u_out, v_out, hx, hy, p, u, v);
         for(int i = 0; i <= vN; i++) {
             for(int j = 0; j <= vM; j++) {
                 v_n[i][j] = v[i][j];
+            }
+        }
+
+        /// Найти турбулентную вязкость
+        for(int i = 0; i <= pN; i++) {
+            for(int j = 0; j <= pM; j++) {
+                k_n[i][j] = k[i][j];
+                w_n[i][j] = w[i][j];
+                nuTurbulent[i][j] = k[i][j] / w[i][j];
             }
         }
 

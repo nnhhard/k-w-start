@@ -1,6 +1,5 @@
 #include "Solvers.h"
 
-
 void SolveByScalarRun(int N,double *u_temp,double *A,double *C,double *B,double *F)
 {
     double alfa[N+1];
